@@ -1,11 +1,12 @@
-import { AbstractMessageReader, MessageReader, DataCallback } from "vscode-jsonrpc/lib/messageReader";
+import { AbstractMessageReader, MessageReader, DataCallback, Disposable } from "vscode-jsonrpc";
 import { EventEmitter } from "events";
 import * as WebSocket from 'ws';
 import { Socket } from 'net';
 
 import MessageBuffer from "./MessageBuffer";
-import { AbstractMessageWriter, MessageWriter } from "vscode-jsonrpc/lib/messageWriter";
-import { RequestMessage, ResponseMessage, NotificationMessage } from "vscode-jsonrpc/lib/messages";
+import { AbstractMessageWriter, MessageWriter } from "vscode-jsonrpc";
+import { RequestMessage, ResponseMessage, NotificationMessage } from "vscode-jsonrpc";
+
 export type Message = RequestMessage | ResponseMessage | NotificationMessage;
 
 export class MessageIO extends EventEmitter {
@@ -111,7 +112,7 @@ export class MessageIOReader extends AbstractMessageReader implements MessageRea
 	private partialMessageTimer: NodeJS.Timer | undefined;
 	private _partialMessageTimeout: number;
 
-	public constructor(io: MessageIO, encoding: string = 'utf8') {
+	public constructor(io: MessageIO, encoding: BufferEncoding = 'utf8') {
 		super();
 		this.io = io;
 		this.io.reader = this;
@@ -127,7 +128,7 @@ export class MessageIOReader extends AbstractMessageReader implements MessageRea
 		return this._partialMessageTimeout;
 	}
 
-	public listen(callback: DataCallback): void {
+	public listen(callback: DataCallback): Disposable {
 		this.nextMessageLength = -1;
 		this.messageToken = 0;
 		this.partialMessageTimer = undefined;
@@ -137,6 +138,8 @@ export class MessageIOReader extends AbstractMessageReader implements MessageRea
 		});
 		this.io.on('error', (error: any) => this.fireError(error));
 		this.io.on('close', () => this.fireClose());
+
+		return;
 	}
 
 	private onData(data: Buffer | String): void {
@@ -202,10 +205,10 @@ const CRLF = '\r\n';
 export class MessageIOWriter extends AbstractMessageWriter implements MessageWriter {
 
 	private io: MessageIO;
-	private encoding: string;
+	private encoding: BufferEncoding;
 	private errorCount: number;
 
-	public constructor(io: MessageIO, encoding: string = 'utf8') {
+	public constructor(io: MessageIO, encoding: BufferEncoding = 'utf8') {
 		super();
 		this.io = io;
 		this.io.writer = this;
@@ -215,8 +218,12 @@ export class MessageIOWriter extends AbstractMessageWriter implements MessageWri
 		this.io.on('close', () => this.fireClose());
 	}
 
-	public write(msg: Message): void {
-		let json = JSON.stringify(msg);
+	public end(): void {
+		
+	}
+
+	public write(msg: Message): Promise<void> {
+		const json: string = JSON.stringify(msg);
 		let contentLength = Buffer.byteLength(json, this.encoding);
 
 		let headers: string[] = [
@@ -235,5 +242,7 @@ export class MessageIOWriter extends AbstractMessageWriter implements MessageWri
 			this.errorCount++;
 			this.fireError(error, msg, this.errorCount);
 		}
+
+		return;
 	}
 }
